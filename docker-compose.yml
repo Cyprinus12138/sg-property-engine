@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sgpe
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sgpe"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  engine:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SGPE_DB_URL: postgres://postgres:postgres@postgres:5432/sgpe?sslmode=disable
+      SGPE_PORT: "8081"
+      SGPE_LOG_LEVEL: ${SGPE_LOG_LEVEL:-info}
+      SGPE_METRICS_ADDR: ${SGPE_METRICS_ADDR:-}
+      SGPE_BOOTSTRAP_ON_BOOT: ${SGPE_BOOTSTRAP_ON_BOOT:-false}
+      URA_ACCESS_KEY: ${URA_ACCESS_KEY:-}
+      ONEMAP_EMAIL: ${ONEMAP_EMAIL:-}
+      ONEMAP_PASSWORD: ${ONEMAP_PASSWORD:-}
+      LTA_ACCOUNT_KEY: ${LTA_ACCOUNT_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      SGPE_POI_THEMES: ${SGPE_POI_THEMES:-kindergartens,hawker,park,hospital}
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

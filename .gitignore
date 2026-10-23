@@ -1,0 +1,18 @@
+# Secrets — keep only the committed .env.example template.
+.env
+.env.*
+!.env.example
+
+# Build output
+/sgpe
+/bin/
+*.exe
+*.test
+*.out
+
+# Editors
+.idea/
+.vscode/
+
+# Local scratch
+/tmp/
