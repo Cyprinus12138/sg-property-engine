@@ -1,5 +1,7 @@
 # sg-property-engine
 
+**English** · [简体中文](README.zh-CN.md)
+
 [![CI](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cyprinus12138/sg-property-engine)](https://goreportcard.com/report/github.com/Cyprinus12138/sg-property-engine)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
@@ -18,9 +20,11 @@ project and geo tools from a nightly-refreshed PostGIS store.
   developer sales (URA Data Service), MRT/LRT exits, schools, bus stops and
   OneMap themed POIs (data.gov.sg, OneMap, LTA DataMall), and the CEA
   salesperson register and transaction records.
-- **Idempotent by construction** — every row carries a `source_hash` of its
-  natural key, so a daily refetch is a no-op for rows already present. Upstream
-  has no "changed since" filter; this is the honest ceiling.
+- **Idempotent ingestion** — transaction and POI rows are deduplicated by
+  `source_hash`; POI syncs upsert rows and remove those no longer present
+  upstream. Other tables use natural keys or transactional snapshot replacement.
+  Refetching data does not create duplicates. Where an upstream API has no
+  "changed since" filter, the engine refetches the available window.
 - **Derives what the sources don't give you** — a `projects` master built from
   URA transactions (and pipeline-only new launches), lazily geocoded through
   OneMap with a Google Places fallback, plus per-project `nearby_mrt` (nearest
@@ -54,8 +58,9 @@ scripts/stack.sh up local           # Go binary on the host (Go 1.25+)
 script. `scripts/stack.sh status`, `logs` and `down` (`down --purge` also deletes
 the data) work for every mode.
 
-The database starts empty on purpose: boot is fast and nothing fires until you
-ask. Kick off the first HDB backfill and watch it:
+The database starts empty, and startup does not trigger a backfill by default.
+Scheduled incremental syncs still run. Start the first HDB backfill and
+watch its progress:
 
 ```bash
 scripts/stack.sh up --no-build --backfill hdb      # or: curl -X POST 'http://localhost:8081/sync/run?source=hdb&mode=backfill'
@@ -93,6 +98,20 @@ go run ./cmd/sgpe config                                  # print the effective 
 Daily incremental syncs are scheduled automatically (see the cron table in
 [docs/DATA_ENGINE.md](docs/DATA_ENGINE.md)). Set `server.bootstrap_on_boot: true`
 if you *do* want a fresh deployment to backfill every source at startup.
+
+## Operating the engine
+
+`sgpe serve` hosts an ops page at `/ui/`; here on a local database with the HDB, MRT and POI sources synced:
+
+<table>
+<tr><td width="50%" valign="top"><a href="docs/images/ops-jobs.png"><img src="docs/images/ops-jobs.png" width="430" alt="Jobs: one row per source with manual triggers"></a><br><sub><b>Jobs.</b> Status, stage and last run per source, with incremental and backfill triggers.</sub></td><td width="50%" valign="top"><a href="docs/images/ops-tables.png"><img src="docs/images/ops-tables.png" width="430" alt="Tables with a raw-row preview"></a><br><sub><b>Tables.</b> Row count, size and last write per table, and a raw-row preview.</sub></td></tr>
+</table>
+
+The original data engine running at production scale in ProProp's operations console:
+
+<table>
+<tr><td width="33%" valign="top"><a href="docs/images/proprop-jobs.png"><img src="docs/images/proprop-jobs.png" width="270" alt="Jobs in ProProp's console"></a><br><sub><b>Jobs</b>, one row per ingest source.</sub></td><td width="33%" valign="top"><a href="docs/images/proprop-runs.png"><img src="docs/images/proprop-runs.png" width="270" alt="Run history"></a><br><sub><b>Run history</b> with mode, duration and row counts.</sub></td><td width="33%" valign="top"><a href="docs/images/proprop-tables.png"><img src="docs/images/proprop-tables.png" width="270" alt="Tables at production scale"></a><br><sub><b>Tables:</b> 243k HDB resale rows, 456k URA rentals, 1.2M CEA transactions.</sub></td></tr>
+</table>
 
 ## Configuration
 
@@ -285,8 +304,10 @@ make smoke       # end-to-end over a throwaway PostGIS container
 make vet
 ```
 
-`make smoke` is shorthand for running the `-tags=smoke` suite against any
-PostGIS you point `TEST_DATABASE_URL` at:
+`make smoke` starts a disposable PostGIS container, sets `TEST_DATABASE_URL`,
+runs the `-tags=smoke` suite, and removes the container after the tests finish.
+You do not need to set `TEST_DATABASE_URL` yourself. To use an existing PostGIS
+instance instead, set the variable and run the tests directly:
 
 ```bash
 TEST_DATABASE_URL=postgres://postgres:test@localhost:55434/postgres?sslmode=disable \

@@ -15,8 +15,9 @@ usable with the standalone `migrate` CLI.
 migrate create -ext sql -dir migrations -seq <short_name>
 ```
 
-Edit both files. Test the down: `down → up` must be a no-op. Never edit a
-migration that has shipped; add a new one. Numbers must be globally unique
+Edit both files. Test rollback and reapplication: `down → up` must restore
+the expected schema. A rollback may delete data; use a disposable database.
+Never edit a migration that has shipped; add a new one. Numbers must be globally unique
 and strictly increasing — golang-migrate refuses to run (and can leave the
 schema `dirty`) when two files share a number, and git merges migrations by
 filename with no textual conflict, so re-check the highest number after

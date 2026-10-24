@@ -19,9 +19,10 @@ rich enough that downstream services stay thin.
    geo filters.
 4. **Daily incremental refresh**, run by an internal scheduler. No external
    cron needed.
-5. **Explicit backfill.** Fresh databases stay empty until an operator triggers
-   a backfill. Boot is always fast, and a wiped `sync_runs` table can never
-   fire every backfill at once by accident.
+5. **Explicit backfill.** Startup does not trigger a backfill by default;
+   operators can request one or enable `server.bootstrap_on_boot`. Scheduled
+   incremental syncs still run. Clearing `sync_runs` does not trigger backfills
+   when bootstrapping is disabled.
 6. **Standalone.** Own binary, own HTTP port, own lifecycle.
 
 ## Non-goals
@@ -101,9 +102,11 @@ GiST index on `geom`.
 
 ## Incremental strategy
 
-Incrementality is source-by-source; the common guarantee is **idempotent
-upserts keyed on `source_hash`**, so any run can safely refetch and overwrite
-without creating duplicates.
+The incremental strategy varies by source. Transaction and POI rows are
+deduplicated by `source_hash`. POI syncs upsert rows and remove those no longer
+present upstream in the same transaction. Other tables use natural keys or
+replace snapshots within a transaction. Refetching the same data does not
+create duplicates.
 
 | Source | Strategy |
 |---|---|
