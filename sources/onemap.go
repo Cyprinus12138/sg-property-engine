@@ -44,6 +44,10 @@ func NewOneMap(creds OneMapCreds) *OneMap {
 
 func (o *OneMap) HasAuth() bool { return o.email != "" && o.password != "" }
 
+// SetHTTPClient replaces the client used for every call (proxy, custom
+// timeouts, a test transport).
+func (o *OneMap) SetHTTPClient(c *http.Client) { o.http = c }
+
 type OneMapResult struct {
 	SearchVal string `json:"SEARCHVAL"`
 	BlkNo     string `json:"BLK_NO"`

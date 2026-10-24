@@ -16,3 +16,7 @@
 
 # Local scratch
 /tmp/
+
+# Local config (may hold credentials) — keep only the committed example.
+/sgpe.yaml
+/.sgpe/

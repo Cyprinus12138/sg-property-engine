@@ -57,3 +57,40 @@ jobs:
         # Serialise packages: each test clones a template database, and the
         # template is created once per process behind an advisory lock.
         run: go test -tags=smoke -count=1 -p 1 ./...
+
+  launcher:
+    name: Launcher (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [compose, docker, local]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        if: matrix.mode == 'local'
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: shellcheck
+        if: matrix.mode == 'compose'
+        run: shellcheck scripts/*.sh
+      # nearby_mrt reads only the database, so the backfill exercises the
+      # trigger path without calling any upstream API from CI.
+      - name: up
+        run: scripts/stack.sh up ${{ matrix.mode }} --backfill nearby_mrt
+      - name: status
+        run: |
+          scripts/stack.sh status
+          curl -fsS localhost:8081/sync/status | grep -q '"source":"nearby_mrt"'
+      - name: logs on failure
+        if: failure()
+        run: |
+          docker ps -a
+          cat .sgpe/sgpe.log 2>/dev/null || true
+          docker compose logs 2>/dev/null || true
+          docker logs sgpe-engine 2>/dev/null || true
+      - name: down
+        if: always()
+        run: scripts/stack.sh down --purge

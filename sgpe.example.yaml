@@ -1,0 +1,71 @@
+# sg-property-engine configuration. Copy to sgpe.yaml (git-ignored) and edit:
+#
+#   cp sgpe.example.yaml sgpe.yaml
+#
+# sgpe reads --config FILE, else $SGPE_CONFIG, else ./sgpe.yaml if present.
+# Every key is optional; the values below are the built-in defaults.
+# Environment variables (and a .env file) override the file — the variable
+# for each key is noted next to it. Unknown keys are an error, so a typo
+# fails at startup instead of silently disabling a source.
+#
+# `sgpe config` prints the effective result with secrets masked.
+
+server:
+  port: "8081"                # SGPE_PORT — bare port or listen address ("127.0.0.1:8081")
+  log_level: info             # SGPE_LOG_LEVEL — debug | info | warn | error
+  metrics_addr: ""            # SGPE_METRICS_ADDR — Prometheus listener, e.g. ":2112"; empty disables
+  # Backfill every source that has never succeeded, at boot. Off by default:
+  # a fresh database stays empty until you POST /sync/run.
+  bootstrap_on_boot: false    # SGPE_BOOTSTRAP_ON_BOOT
+
+database:
+  # Postgres with the PostGIS extension available. Leave empty to have sgpe
+  # start a local PostGIS container through Docker (see auto_docker).
+  url: ""                     # SGPE_DB_URL (DATABASE_URL also accepted)
+
+  # Used only when url is empty. The container binds to 127.0.0.1, uses a
+  # fixed local password and keeps data in a named volume across restarts —
+  # a development convenience, not a deployment. Stop it with
+  # `scripts/stop.sh local`; add --purge to drop the volume too.
+  auto_docker:
+    enabled: true             # SGPE_DB_AUTO_DOCKER
+    image: postgis/postgis:16-3.4   # SGPE_DB_DOCKER_IMAGE
+    container: sgpe-postgis   # SGPE_DB_DOCKER_CONTAINER
+    volume: sgpe-pgdata       # SGPE_DB_DOCKER_VOLUME
+    port: 55432               # SGPE_DB_DOCKER_PORT — host port; 0 lets Docker pick
+
+# Upstream credentials. All optional; a missing key disables that source and
+# the startup log says so. Prefer environment variables for these in shared
+# deployments — this file is plain text.
+credentials:
+  # URA Data Service — private transactions, rentals, pipeline, developer sales.
+  # Free: https://eservice.ura.gov.sg/uraDataService/register
+  ura_access_key: ""          # URA_ACCESS_KEY
+  # OneMap Themes API (kindergartens, hawker centres, parks, hospitals).
+  # Geocoding search works without it. https://www.onemap.gov.sg/apidocs/register
+  onemap_email: ""            # ONEMAP_EMAIL
+  onemap_password: ""         # ONEMAP_PASSWORD
+  # LTA DataMall — bus stops. Free:
+  # https://datamall.lta.gov.sg/content/datamall/en/request-for-api.html
+  lta_account_key: ""         # LTA_ACCOUNT_KEY
+  # Google Places geocoding fallback when OneMap has no result. Billed by Google.
+  google_maps_api_key: ""     # GOOGLE_MAPS_API_KEY
+
+# Cron specs in server-local time (defaults are off-peak SGT, ordered so geo
+# and nearby_mrt run after the feeds they read). "" disables the schedule
+# for a source; manual triggers still work.
+cron:
+  hdb: "0 2 * * *"                    # SGPE_CRON_HDB
+  cea: "30 2 * * *"                   # SGPE_CRON_CEA
+  cea_txn: "45 2 * * *"               # SGPE_CRON_CEA_TXN
+  ura_txn: "0 3 * * *"                # SGPE_CRON_URA_TXN
+  ura_rental: "30 3 * * *"            # SGPE_CRON_URA_RENT
+  ura_pipeline: "45 3 * * *"          # SGPE_CRON_URA_PIPE
+  ura_developer_sales: "0 4 * * *"    # SGPE_CRON_URA_DEV_SALES
+  geo: "15 4 * * *"                   # SGPE_CRON_GEO
+  pois: "0 5 * * 1"                   # SGPE_CRON_POIS
+  nearby_mrt: "0 6 * * *"             # SGPE_CRON_NEARBY_MRT
+
+# OneMap themes ingested as POIs: friendly names or raw OneMap queryNames.
+# SGPE_POI_THEMES takes a comma-separated list.
+poi_themes: [kindergartens, hawker, park, hospital]

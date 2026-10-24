@@ -31,6 +31,10 @@ func NewLTA(creds LTACreds) *LTA {
 
 func (l *LTA) HasKey() bool { return l.accountKey != "" }
 
+// SetHTTPClient replaces the client used for every call (proxy, custom
+// timeouts, a test transport).
+func (l *LTA) SetHTTPClient(c *http.Client) { l.http = c }
+
 type LTABusStop struct {
 	BusStopCode string  `json:"BusStopCode"`
 	RoadName    string  `json:"RoadName"`

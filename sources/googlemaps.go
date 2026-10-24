@@ -33,6 +33,10 @@ func NewGoogleMaps(creds GoogleMapsCreds) *GoogleMaps {
 
 func (g *GoogleMaps) HasAuth() bool { return g.apiKey != "" }
 
+// SetHTTPClient replaces the client used for every call (proxy, custom
+// timeouts, a test transport).
+func (g *GoogleMaps) SetHTTPClient(c *http.Client) { g.http = c }
+
 type GoogleMapsPlace struct {
 	Name             string
 	DisplayName      string

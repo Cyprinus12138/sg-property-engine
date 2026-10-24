@@ -23,13 +23,24 @@ type Server struct {
 // Routes builds the HTTP handler. Paths are the public contract — see
 // README.md for the table — and are kept stable across releases.
 func (s *Server) Routes() http.Handler {
+	return logMiddleware(s.mux())
+}
+
+func (s *Server) mux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Ops
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /sync/status", s.syncStatus)
 	mux.HandleFunc("POST /sync/run", s.syncRun)
+	mux.HandleFunc("GET /sync/runs", s.syncRuns)
 	mux.HandleFunc("GET /sync/runs/{id}", s.syncRunByID)
+	mux.HandleFunc("GET /db/tables", s.dbTables)
+	mux.HandleFunc("GET /db/tables/{table}/rows", s.dbTableRows)
+
+	// Ops UI — static, embedded; see ui.go.
+	mux.Handle("GET /ui/", uiHandler())
+	mux.Handle("GET /{$}", http.RedirectHandler("/ui/", http.StatusFound))
 
 	// Query — HDB
 	mux.HandleFunc("GET /hdb/transactions", s.hdbTransactions)
@@ -60,7 +71,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /cea/lookup", s.ceaLookup)
 	mux.HandleFunc("GET /cea/practice-stats", s.ceaPracticeStats)
 
-	return logMiddleware(mux)
+	return mux
 }
 
 func logMiddleware(h http.Handler) http.Handler {

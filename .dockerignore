@@ -1,0 +1,10 @@
+# Keep credentials and local state out of the build context.
+.env
+.env.*
+sgpe.yaml
+.sgpe/
+.git/
+bin/
+/sgpe
+*.test
+*.out

@@ -43,6 +43,10 @@ func NewURA(accessKey string) *URA {
 
 func (u *URA) HasKey() bool { return u.accessKey != "" }
 
+// SetHTTPClient replaces the client used for every call (proxy, custom
+// timeouts, a test transport).
+func (u *URA) SetHTTPClient(c *http.Client) { u.http = c }
+
 func (u *URA) token_(ctx context.Context) (string, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -241,7 +245,8 @@ func recentRefPeriodsMonthly(n int) []string {
 	return out
 }
 
-func sgNow() time.Time {
+// sgNow is a var so tests can pin the clock the ref periods are derived from.
+var sgNow = func() time.Time {
 	loc, err := time.LoadLocation("Asia/Singapore")
 	if err != nil {
 		return time.Now().UTC().Add(8 * time.Hour)

@@ -66,7 +66,8 @@ sources/         datagov, ura (+schema_ura), onemap, lta, googlemaps — API cli
 ingest/          one ingestor per source; all return (rowsIn, rowsUpserted, err)
 store/           pgx repositories: hdb, ura, projects, pois, mrt, geo, cea, sync
 scheduler/       robfig/cron wiring, advisory locks, progress reporter
-httpapi/         query builder (geo filters), handlers, titlecase helper
+httpapi/         query builder (geo filters), handlers, titlecase helper,
+                 ops endpoints and the embedded ops UI (httpapi/ui/)
 client/          Go client for the query API
 db/              RunMigrations (golang-migrate behind an advisory lock)
 migrations/      embedded SQL schema
@@ -118,7 +119,8 @@ without creating duplicates.
 ## Scheduler
 
 `github.com/robfig/cron/v3` inside the process. Defaults (server-local time,
-override via `SGPE_CRON_*`):
+override under `cron:` in the config file or via `SGPE_CRON_*`; an empty spec
+turns a schedule off):
 
 | Job | Cron | Depends on |
 |---|---|---|
@@ -186,5 +188,10 @@ vocabulary.
   aggregations filter `psf > 0`.
 - **Rate limits.** data.gov.sg returns 429 under load; the client waits and
   retries, and the bulk download endpoint is preferred for full snapshots.
-- **Metrics.** Set `SGPE_METRICS_ADDR=:2112` to expose Prometheus metrics on a
+- **Ops UI.** `/ui/` is plain HTML/CSS/JS embedded with `go:embed`; it calls
+  the public JSON routes through relative paths, so it works when a proxy
+  mounts the engine under a prefix. `TestUI_CallsOnlyRegisteredRoutes` fails
+  if `app.js` calls a route the mux does not serve. Table preview reads from a
+  fixed allowlist in `store/admin.go`; add a new table there to make it visible.
+- **Metrics.** Set `server.metrics_addr` (`SGPE_METRICS_ADDR`), e.g. `:2112`, to expose Prometheus metrics on a
   separate listener.

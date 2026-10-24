@@ -12,6 +12,9 @@ LABEL org.opencontainers.image.title="sg-property-engine" \
       org.opencontainers.image.licenses="PolyForm-Noncommercial-1.0.0" \
       org.opencontainers.image.authors="Mr.Cyprinus"
 COPY --from=build /out/sgpe /sgpe
+# The distroless home is 0700 nonroot. stack.sh runs the image as the
+# invoking user, who could not even look for an optional ./sgpe.yaml there.
+WORKDIR /
 EXPOSE 8081
 USER nonroot:nonroot
 ENTRYPOINT ["/sgpe"]

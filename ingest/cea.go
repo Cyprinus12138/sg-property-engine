@@ -15,8 +15,10 @@ import (
 
 // CEAIngestor pulls the CEA salesperson register CSV from data.gov.sg and
 // upserts it into cea_salespersons. The source publishes a full snapshot on
-// every refresh, so incremental and backfill share the same code path —
-// idempotency comes from the source_hash unique index.
+// every refresh, so incremental and backfill share the same code path. Rows
+// are keyed on registration_no and refreshed in place (agency and end date
+// change over time), so a re-run never duplicates but does count every row
+// as upserted.
 type CEAIngestor struct {
 	DG    *sources.DataGov
 	Store *store.Store

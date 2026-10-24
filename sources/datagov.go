@@ -15,9 +15,12 @@ import (
 // retryOn429 wraps doFn with a simple retry loop for HTTP 429 responses.
 // data.gov.sg asks callers to wait ~10s and suggests signing up for an API key.
 // We retry up to maxRetries times with retryDelay between attempts.
-const (
-	dgMaxRetries = 3
-	dgRetryDelay = 12 * time.Second
+const dgMaxRetries = 3
+
+// The back-off and poll interval are vars so tests can shrink them.
+var (
+	dgRetryDelay   = 12 * time.Second
+	dgPollInterval = 3 * time.Second
 )
 
 // HDB resale transactions dataset (master, all years).
@@ -49,6 +52,10 @@ type DataGov struct {
 func NewDataGov() *DataGov {
 	return &DataGov{http: &http.Client{Timeout: 45 * time.Second}}
 }
+
+// SetHTTPClient replaces the client used for every data.gov.sg call — for
+// an egress proxy, custom timeouts, or a test transport.
+func (d *DataGov) SetHTTPClient(c *http.Client) { d.http = c }
 
 type datastoreResp struct {
 	Success bool `json:"success"`
@@ -157,8 +164,9 @@ func (d *DataGov) DownloadDataset(ctx context.Context, datasetID string) (io.Rea
 		return nil, err
 	}
 
-	// The default client has a short timeout; dataset downloads can be tens of MB.
-	dl := &http.Client{Timeout: 5 * time.Minute}
+	// The default client has a short timeout; dataset downloads can be tens
+	// of MB. Keep the configured transport (proxy, test server) though.
+	dl := &http.Client{Timeout: 5 * time.Minute, Transport: d.http.Transport}
 	req, _ := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
 	req.Header.Set("User-Agent", "sg-property-engine/0.1 (+https://github.com/Cyprinus12138/sg-property-engine)")
 	started := time.Now()
@@ -203,7 +211,7 @@ func (d *DataGov) fetchDownloadURL(ctx context.Context, datasetID string) (strin
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-time.After(3 * time.Second):
+		case <-time.After(dgPollInterval):
 		}
 		fileURL, err = d.callDownloadEndpoint(ctx, pollURL)
 		if err != nil {

@@ -33,21 +33,34 @@ project and geo tools from a nightly-refreshed PostGIS store.
   advisory locks (two replicas cannot run the same job; a manual trigger and a
   cron tick cannot collide), `sync_runs` bookkeeping with throttled progress
   reporting, and a `409` when a source is already running.
+- **Ships an ops page** — `/ui/` in the same binary shows each source's status
+  and progress, starts incremental or backfill runs, lists run history, and
+  previews any table. No Node toolchain; three static files are embedded.
 
 ## Quickstart
 
+One command, three ways to run it. Each waits until `/healthz` answers.
+
 ```bash
-cp .env.example .env          # add URA_ACCESS_KEY etc. — all optional, see below
-docker compose up --build     # PostGIS + engine on :8081
+scripts/stack.sh up                 # docker compose: PostGIS + engine image (default)
+scripts/stack.sh up docker          # plain `docker run`, no compose needed
+scripts/stack.sh up local           # Go binary on the host (Go 1.25+)
 ```
+
+`make up` / `make up MODE=local` / `make dev` (local, foreground) wrap the same
+script. `scripts/stack.sh status`, `logs` and `down` (`down --purge` also deletes
+the data) work for every mode.
 
 The database starts empty on purpose: boot is fast and nothing fires until you
 ask. Kick off the first HDB backfill and watch it:
 
 ```bash
-curl -X POST 'http://localhost:8081/sync/run?source=hdb&mode=backfill'
-curl        'http://localhost:8081/sync/status'
+scripts/stack.sh up --no-build --backfill hdb      # or: curl -X POST 'http://localhost:8081/sync/run?source=hdb&mode=backfill'
+curl 'http://localhost:8081/sync/status'
 ```
+
+Or open <http://localhost:8081/ui/> (`/` redirects there) to watch progress,
+start runs and browse the tables.
 
 Then query:
 
@@ -65,36 +78,74 @@ curl 'http://localhost:8081/hdb/stats?group_by=town&metric=median_psf&min_month=
 curl 'http://localhost:8081/geo/nearest-stations?lat=1.3521&lng=103.8198'
 ```
 
-Without Docker:
+Or drive the binary directly:
 
 ```bash
-createdb sgpe && psql sgpe -c 'CREATE EXTENSION postgis;'
-SGPE_DB_URL=postgres://localhost/sgpe?sslmode=disable go run ./cmd/sgpe serve
-# or run one job in the foreground and exit:
-SGPE_DB_URL=... go run ./cmd/sgpe sync --source hdb --mode backfill
+go run ./cmd/sgpe serve                                   # no DB configured → starts a local PostGIS via Docker
+go run ./cmd/sgpe sync --source hdb --mode backfill       # one job in the foreground, then exit
+go run ./cmd/sgpe --config prod.yaml migrate
+go run ./cmd/sgpe config                                  # print the effective config, secrets masked
 ```
 
 Daily incremental syncs are scheduled automatically (see the cron table in
-[docs/DATA_ENGINE.md](docs/DATA_ENGINE.md)). Set `SGPE_BOOTSTRAP_ON_BOOT=true`
+[docs/DATA_ENGINE.md](docs/DATA_ENGINE.md)). Set `server.bootstrap_on_boot: true`
 if you *do* want a fresh deployment to backfill every source at startup.
+
+## Configuration
+
+Three layers, later ones winning:
+
+1. built-in defaults;
+2. a YAML file: `--config FILE`, else `$SGPE_CONFIG`, else `./sgpe.yaml` if it
+   exists. Copy [sgpe.example.yaml](sgpe.example.yaml), which lists every key
+   with its default and its environment variable. Unknown keys are an error, so
+   a typo fails at startup instead of quietly disabling a source;
+3. environment variables, including a `.env` file
+   ([.env.example](.env.example)). Empty values count as unset.
+
+**No database configured?** `serve`, `sync` and `migrate` then start a local
+PostGIS container through the Docker CLI, or reuse one, and connect to it.
+The container is called `sgpe-postgis`, binds to `127.0.0.1:55432` and keeps its
+data in the `sgpe-pgdata` volume, so a backfill survives restarts. This is a
+development convenience, not a deployment. Set `database.url` (or `SGPE_DB_URL`)
+for anything real, and `database.auto_docker.enabled: false` to make a missing
+URL an error instead. A container with that name that sgpe did not create is
+left alone and reported.
+
+How the modes use the config:
+
+| Mode | Config file | Database |
+|---|---|---|
+| `local` | full layering as above | `database.url`, else the auto-started container |
+| `docker` | `./sgpe.yaml` or `--config` mounted read-only | `SGPE_DB_URL`, else the same `sgpe-postgis` container `local` uses |
+| `compose` | same mount | `SGPE_DB_URL`, else the bundled `postgres` service |
+
+In the container modes the script runs the engine as your user, so a `0600`
+`sgpe.yaml` stays readable. The listen port inside the container is fixed;
+publish a different one with `--port`.
 
 ### Credentials
 
 All upstream keys are optional; a missing key disables that source and the
-startup log says so. See [.env.example](.env.example) for where to register.
+startup log says so. Put them in `.env` or under `credentials:` in the YAML file.
+See [.env.example](.env.example) for where to register.
 
-| Variable | Enables |
-|---|---|
-| `URA_ACCESS_KEY` | `ura_txn`, `ura_rental`, `ura_pipeline`, `ura_developer_sales` |
-| `ONEMAP_EMAIL` / `ONEMAP_PASSWORD` | OneMap Themes POIs (kindergartens, hawker centres, parks, hospitals). Geocoding search works without them. |
-| `LTA_ACCOUNT_KEY` | Bus stops |
-| `GOOGLE_MAPS_API_KEY` | Geocoding fallback when OneMap has no result |
+| Variable | YAML key | Enables |
+|---|---|---|
+| `URA_ACCESS_KEY` | `ura_access_key` | `ura_txn`, `ura_rental`, `ura_pipeline`, `ura_developer_sales` |
+| `ONEMAP_EMAIL` / `ONEMAP_PASSWORD` | `onemap_email` / `onemap_password` | OneMap Themes POIs (kindergartens, hawker centres, parks, hospitals). Geocoding search works without them. |
+| `LTA_ACCOUNT_KEY` | `lta_account_key` | Bus stops |
+| `GOOGLE_MAPS_API_KEY` | `google_maps_api_key` | Geocoding fallback when OneMap has no result |
 
 No data is bundled with this repository and none is redistributed — the engine
 pulls from the publishers under your own registration. Read
 [docs/DATA_TERMS.md](docs/DATA_TERMS.md) before deploying.
 
 ## API
+
+There is no authentication on any route, including `POST /sync/run` and the
+ops page. Keep the port on a private network or behind a proxy that adds auth;
+the compose file and launcher publish it on all interfaces by default.
 
 Single listener, JSON in and out. List endpoints return
 `{rows, total, limit, offset}`; stats endpoints return `{buckets: [{key, value, count}]}`.
@@ -104,7 +155,11 @@ Single listener, JSON in and out. List endpoints return
 | GET | `/healthz` | DB ping |
 | GET | `/sync/status` | latest run per source + known sources |
 | POST | `/sync/run?source=&mode=incremental\|backfill[&arg=]` | trigger a job (202 with `run_id`; 409 if running) |
+| GET | `/sync/runs[?source=]` | run history, newest first (paged) |
 | GET | `/sync/runs/{id}` | one `sync_runs` row with stage/progress |
+| GET | `/db/tables` | row count, on-disk size and last write per table |
+| GET | `/db/tables/{table}/rows` | raw rows of one table, 100 per page (max 200); geography as WKT, bytea as hex |
+| GET | `/ui/` | ops page (embedded static files) |
 | GET | `/hdb/transactions` | filters: town, flat_type, block, street, min/max_month, min/max_price, min/max_area, storey, sort + geo |
 | GET | `/hdb/stats` | `group_by=month\|town\|flat_type`, `metric=median_psf\|median_price\|avg_price\|count` + the same filters |
 | GET | `/ura/transactions` | filters: project, district, property_type, tenure, market_segment, min/max_date, min/max_price, min/max_psf + geo |
@@ -171,15 +226,23 @@ Design notes, schema and the incremental strategy per source live in
 ## Development
 
 ```bash
-go test ./...                                   # unit tests, no services
-docker run --rm -d --name sgpe-pg -e POSTGRES_PASSWORD=test \
-  -p 55433:5432 postgis/postgis:16-3.4
-TEST_DATABASE_URL=postgres://postgres:test@localhost:55433/postgres?sslmode=disable \
-  go test -tags=smoke -count=1 -p 1 ./...       # end-to-end over a real PostGIS
+make test        # unit tests (race detector), no services needed
+make smoke       # end-to-end over a throwaway PostGIS container
+make vet
+```
+
+`make smoke` is shorthand for running the `-tags=smoke` suite against any
+PostGIS you point `TEST_DATABASE_URL` at:
+
+```bash
+TEST_DATABASE_URL=postgres://postgres:test@localhost:55434/postgres?sslmode=disable \
+  go test -tags=smoke -count=1 -p 1 ./...
 ```
 
 Smoke tests clone a migrated template database per test, so they are isolated
-and fast after the first run. Schema changes are migrations under
+and fast after the first run. Upstream clients are tested against
+`httptest` servers through `sources/sourcestest`, which redirects a client's
+requests without touching the network. Schema changes are migrations under
 `migrations/` — never boot-time `ALTER`s.
 
 ## License

@@ -21,3 +21,17 @@ All notable changes to this project are documented here. The format follows
   subcommands; `client` package for Go consumers.
 - Minimal from-scratch migrations, docker-compose stack, CI (unit + PostGIS
   smoke), design doc and data-terms summary.
+- YAML config file (`--config`, `$SGPE_CONFIG` or `./sgpe.yaml`) layered under
+  environment variables, decoded strictly; `sgpe config` prints the effective
+  config with secrets masked.
+- With no database configured, `serve` / `sync` / `migrate` start or reuse a
+  local PostGIS container through the Docker CLI.
+- `scripts/stack.sh` one-command launcher (`up` / `down` / `status` / `logs`) for
+  compose, plain docker and local-binary modes, plus a Makefile and a CI job
+  that runs each mode.
+- Ops page at `/ui/`, embedded in the binary: per-source jobs with progress
+  and run buttons, run history, and table stats with row preview. Backed by
+  new endpoints `GET /sync/runs`, `GET /db/tables` and
+  `GET /db/tables/{table}/rows`.
+- Unit tests for every upstream client against `httptest` (`sources/sourcestest`),
+  for config loading and for the local-database bootstrap.

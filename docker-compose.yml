@@ -1,39 +1,74 @@
+# PostGIS + engine. `scripts/stack.sh up` drives this; plain
+# `docker compose up --build` works too.
+#
+# Configuration reaches the engine two ways:
+#   - environment / .env — every ${VAR:-} below is optional; an empty value
+#     counts as unset, so it never masks the YAML file
+#   - a YAML file — set SGPE_CONFIG_FILE=./sgpe.yaml (stack.sh does this when
+#     ./sgpe.yaml exists); it is mounted read-only at /etc/sgpe/sgpe.yaml
+#
+# The engine always talks to the bundled postgres service unless SGPE_DB_URL
+# is set; database.url in the YAML file is overridden in this mode.
+name: sgpe
+
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    image: ${SGPE_DB_DOCKER_IMAGE:-postgis/postgis:16-3.4}
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: sgpe
     ports:
-      - "5432:5432"
+      # Localhost only, and off 5432 so a Postgres already on the machine
+      # does not collide. Set SGPE_COMPOSE_DB_PORT to move it.
+      - "127.0.0.1:${SGPE_COMPOSE_DB_PORT:-55433}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sgpe"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d sgpe"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
 
   engine:
     build: .
+    image: sgpe:local
     depends_on:
       postgres:
         condition: service_healthy
+    # stack.sh runs the engine as the invoking user so a 0600 sgpe.yaml is
+    # readable through the bind mount; the image default is distroless nonroot.
+    user: "${SGPE_RUN_AS:-65532:65532}"
     environment:
-      SGPE_DB_URL: postgres://postgres:postgres@postgres:5432/sgpe?sslmode=disable
+      SGPE_CONFIG: /etc/sgpe/sgpe.yaml
+      SGPE_DB_URL: ${SGPE_DB_URL:-postgres://postgres:postgres@postgres:5432/sgpe?sslmode=disable}
+      SGPE_DB_AUTO_DOCKER: "false"
+      # Fixed inside the container; publish elsewhere with SGPE_HOST_PORT.
       SGPE_PORT: "8081"
-      SGPE_LOG_LEVEL: ${SGPE_LOG_LEVEL:-info}
+      SGPE_LOG_LEVEL: ${SGPE_LOG_LEVEL:-}
       SGPE_METRICS_ADDR: ${SGPE_METRICS_ADDR:-}
-      SGPE_BOOTSTRAP_ON_BOOT: ${SGPE_BOOTSTRAP_ON_BOOT:-false}
+      SGPE_BOOTSTRAP_ON_BOOT: ${SGPE_BOOTSTRAP_ON_BOOT:-}
       URA_ACCESS_KEY: ${URA_ACCESS_KEY:-}
       ONEMAP_EMAIL: ${ONEMAP_EMAIL:-}
       ONEMAP_PASSWORD: ${ONEMAP_PASSWORD:-}
       LTA_ACCOUNT_KEY: ${LTA_ACCOUNT_KEY:-}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
-      SGPE_POI_THEMES: ${SGPE_POI_THEMES:-kindergartens,hawker,park,hospital}
+      SGPE_POI_THEMES: ${SGPE_POI_THEMES:-}
+      SGPE_CRON_HDB: ${SGPE_CRON_HDB:-}
+      SGPE_CRON_CEA: ${SGPE_CRON_CEA:-}
+      SGPE_CRON_CEA_TXN: ${SGPE_CRON_CEA_TXN:-}
+      SGPE_CRON_URA_TXN: ${SGPE_CRON_URA_TXN:-}
+      SGPE_CRON_URA_RENT: ${SGPE_CRON_URA_RENT:-}
+      SGPE_CRON_URA_PIPE: ${SGPE_CRON_URA_PIPE:-}
+      SGPE_CRON_URA_DEV_SALES: ${SGPE_CRON_URA_DEV_SALES:-}
+      SGPE_CRON_GEO: ${SGPE_CRON_GEO:-}
+      SGPE_CRON_POIS: ${SGPE_CRON_POIS:-}
+      SGPE_CRON_NEARBY_MRT: ${SGPE_CRON_NEARBY_MRT:-}
+    volumes:
+      # /dev/null reads as an empty YAML file, i.e. "defaults only".
+      - ${SGPE_CONFIG_FILE:-/dev/null}:/etc/sgpe/sgpe.yaml:ro
     ports:
-      - "8081:8081"
+      - "${SGPE_HOST_PORT:-8081}:8081"
     restart: unless-stopped
 
 volumes:

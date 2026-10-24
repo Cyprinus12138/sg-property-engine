@@ -16,3 +16,10 @@ const (
 	hottestPageDefault = 15
 	hottestPageMax     = 50
 )
+
+// previewPageDefault / previewPageMax bound /db/tables/{table}/rows, which
+// backs the ops UI's table preview.
+const (
+	previewPageDefault = 100
+	previewPageMax     = 200
+)
