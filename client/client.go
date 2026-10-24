@@ -468,6 +468,23 @@ func (c *Client) POIs(ctx context.Context, params url.Values) (*POIPage, error) 
 	return &p, nil
 }
 
+// POITypeCount mirrors one row of GET /pois/types.
+type POITypeCount struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
+
+// POITypes — GET /pois/types: every ingested POI type with its row count.
+func (c *Client) POITypes(ctx context.Context) ([]POITypeCount, error) {
+	var out struct {
+		Types []POITypeCount `json:"types"`
+	}
+	if err := c.get(ctx, "/pois/types", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Types, nil
+}
+
 type NearestStations struct {
 	Lat      float64      `json:"lat"`
 	Lng      float64      `json:"lng"`

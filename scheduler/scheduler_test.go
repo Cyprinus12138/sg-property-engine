@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/Cyprinus12138/sg-property-engine/store"
@@ -44,5 +45,22 @@ func TestRegister_DuplicateSourceRejected(t *testing.T) {
 	}
 	if err := s.Register(Job{Source: "dup", Run: noop}); err == nil {
 		t.Errorf("duplicate source: want error")
+	}
+}
+
+func TestSources_Sorted(t *testing.T) {
+	noop := func(context.Context, string, store.ProgressReporter) (int, int, error) { return 0, 0, nil }
+	s := New(nil)
+	for _, src := range []string{"ura_txn", "cea", "hdb", "pois", "geo", "nearby_mrt"} {
+		if err := s.Register(Job{Source: src, Run: noop}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"cea", "geo", "hdb", "nearby_mrt", "pois", "ura_txn"}
+	// Map iteration order varies between calls; ask several times.
+	for i := 0; i < 20; i++ {
+		if got := s.Sources(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("Sources() = %v, want %v", got, want)
+		}
 	}
 }

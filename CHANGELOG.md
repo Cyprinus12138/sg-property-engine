@@ -29,6 +29,11 @@ All notable changes to this project are documented here. The format follows
 - `scripts/stack.sh` one-command launcher (`up` / `down` / `status` / `logs`) for
   compose, plain docker and local-binary modes, plus a Makefile and a CI job
   that runs each mode.
+- MCP server: 18 read-only tools over the query API, at `/mcp` on `sgpe serve`
+  (streamable HTTP) and as `sgpe mcp` (stdio, against a running engine).
+  Place anchors resolve to coordinates server-side and fail loudly when
+  unknown; filter values are normalised to the stored forms.
+- `client.POITypes` for `GET /pois/types`.
 - Ops page at `/ui/`, embedded in the binary: per-source jobs with progress
   and run buttons, run history, and table stats with row preview. Backed by
   new endpoints `GET /sync/runs`, `GET /db/tables` and

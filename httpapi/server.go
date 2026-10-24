@@ -18,6 +18,8 @@ import (
 type Server struct {
 	Store *store.Store
 	Sched *scheduler.Scheduler
+	// MCP, when set, is mounted at /mcp (see package mcpserver).
+	MCP http.Handler
 }
 
 // Routes builds the HTTP handler. Paths are the public contract — see
@@ -37,6 +39,10 @@ func (s *Server) mux() *http.ServeMux {
 	mux.HandleFunc("GET /sync/runs/{id}", s.syncRunByID)
 	mux.HandleFunc("GET /db/tables", s.dbTables)
 	mux.HandleFunc("GET /db/tables/{table}/rows", s.dbTableRows)
+
+	if s.MCP != nil {
+		mux.Handle("/mcp", s.MCP)
+	}
 
 	// Ops UI — static, embedded; see ui.go.
 	mux.Handle("GET /ui/", uiHandler())
@@ -100,6 +106,16 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.code = code
 	s.ResponseWriter.WriteHeader(code)
 }
+
+// Flush and Unwrap keep streaming responses (MCP over SSE) working through
+// the recorder.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")

@@ -33,6 +33,9 @@ project and geo tools from a nightly-refreshed PostGIS store.
   advisory locks (two replicas cannot run the same job; a manual trigger and a
   cron tick cannot collide), `sync_runs` bookkeeping with throttled progress
   reporting, and a `409` when a source is already running.
+- **Speaks MCP** — the same queries as read-only Model Context Protocol tools,
+  over HTTP at `/mcp` or over stdio with `sgpe mcp`, so an AI assistant can
+  answer "4-room resale prices near Bishan MRT" from the database directly.
 - **Ships an ops page** — `/ui/` in the same binary shows each source's status
   and progress, starts incremental or backfill runs, lists run history, and
   previews any table. No Node toolchain; three static files are embedded.
@@ -160,6 +163,7 @@ Single listener, JSON in and out. List endpoints return
 | GET | `/db/tables` | row count, on-disk size and last write per table |
 | GET | `/db/tables/{table}/rows` | raw rows of one table, 100 per page (max 200); geography as WKT, bytea as hex |
 | GET | `/ui/` | ops page (embedded static files) |
+| POST | `/mcp` | MCP over streamable HTTP; see [MCP](#mcp) |
 | GET | `/hdb/transactions` | filters: town, flat_type, block, street, min/max_month, min/max_price, min/max_area, storey, sort + geo |
 | GET | `/hdb/stats` | `group_by=month\|town\|flat_type`, `metric=median_psf\|median_price\|avg_price\|count` + the same filters |
 | GET | `/ura/transactions` | filters: project, district, property_type, tenure, market_segment, min/max_date, min/max_price, min/max_psf + geo |
@@ -191,6 +195,56 @@ Single listener, JSON in and out. List endpoints return
 
 URA publishes names in UPPERCASE; responses keep the raw `name` as the lookup
 key and add a Title-Cased `display_name`.
+
+## MCP
+
+Every `sgpe serve` also serves the query API as MCP tools at `/mcp`
+(streamable HTTP). `sgpe mcp` serves the same tools over stdio for clients that
+launch a command; it needs no database, only a running engine to call.
+
+```bash
+# Claude Code, over HTTP
+claude mcp add --transport http sgpe http://localhost:8081/mcp
+
+# Any stdio client: local binary, or inside the docker-mode container
+sgpe mcp --url http://localhost:8081
+docker exec -i sgpe-engine /sgpe mcp
+```
+
+For clients configured with JSON:
+
+```json
+{ "mcpServers": { "sgpe": { "command": "/path/to/sgpe", "args": ["mcp", "--url", "http://localhost:8081"] } } }
+```
+
+| Tool | What it answers |
+|---|---|
+| `search_properties` | turn a partial name into the exact project or HDB block |
+| `get_project`, `find_projects` | project facts and nearest stations; projects by district, type, location |
+| `hdb_resale_transactions`, `hdb_resale_stats` | HDB resale rows; median psf / price / count by month, town or flat type |
+| `private_transactions`, `private_rentals`, `private_rental_trend` | URA sales and rentals; monthly rent percentiles |
+| `development_pipeline`, `developer_sales` | upcoming projects; new-launch sales by month |
+| `nearest_mrt`, `find_pois`, `poi_types` | stations and other POIs around a place |
+| `hottest_projects`, `district_median` | 90-day volume ranking; district median price and psf |
+| `cea_salesperson`, `cea_practice_stats` | CEA register lookup; a salesperson's last 12 months |
+| `data_freshness` | when each source last synced, so "no rows" is not misread as "none exist" |
+
+The tools are read-only; starting syncs stays with the API and the ops page.
+They are written for a model to call:
+
+- **Places are resolved by the server.** `near` takes a project name, an MRT
+  station (`poi_type: mrt_exit`), an HDB block and street, or coordinates. The
+  server turns it into coordinates and returns the resolved `anchor` with the
+  results. A name it cannot find is an error, never a search of the whole island.
+- **Inputs are normalised in code.** "Bishan", "4-room", "D9", "condo" and
+  "2024-03" become the stored forms (`BISHAN`, `4 ROOM`, `09`, `Condominium`,
+  `2024-03-01`). Out-of-range districts, unknown market segments and
+  coordinates outside Singapore are rejected with a message that says why.
+- **Pages are small.** 20 rows by default and at most 100, with `total` for paging.
+
+`/mcp` refuses cross-origin browser requests and, on a loopback connection, any
+`Host` other than localhost (DNS-rebinding protection). Like the rest of the
+API it has no authentication; see the note at the top of [API](#api).
 
 ### Go client
 

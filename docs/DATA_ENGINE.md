@@ -69,6 +69,7 @@ scheduler/       robfig/cron wiring, advisory locks, progress reporter
 httpapi/         query builder (geo filters), handlers, titlecase helper,
                  ops endpoints and the embedded ops UI (httpapi/ui/)
 client/          Go client for the query API
+mcpserver/       MCP tools on top of client/ (served at /mcp and by `sgpe mcp`)
 db/              RunMigrations (golang-migrate behind an advisory lock)
 migrations/      embedded SQL schema
 internal/testdb/ smoke-test bootstrap (template-database cloning)
@@ -193,5 +194,11 @@ vocabulary.
   mounts the engine under a prefix. `TestUI_CallsOnlyRegisteredRoutes` fails
   if `app.js` calls a route the mux does not serve. Table preview reads from a
   fixed allowlist in `store/admin.go`; add a new table there to make it visible.
+- **MCP.** `mcpserver` only ever calls the engine through `client.Client`.
+  Inside `sgpe serve` that client's transport invokes the router directly
+  (`InProcessClient`), so `/mcp` and the JSON API cannot drift apart. The
+  HTTP API ignores a `near_*` anchor it cannot resolve; the MCP layer resolves
+  anchors itself and passes only `near_lat`/`near_lng`, so an unknown name is
+  an error instead of an unfiltered result.
 - **Metrics.** Set `server.metrics_addr` (`SGPE_METRICS_ADDR`), e.g. `:2112`, to expose Prometheus metrics on a
   separate listener.

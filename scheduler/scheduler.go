@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -128,11 +129,14 @@ func (s *Scheduler) WaitDone(ctx context.Context, source string) {
 	}
 }
 
+// Sources returns the registered source names, sorted so API responses
+// (/sync/status, the ops UI, data_freshness) keep a stable order.
 func (s *Scheduler) Sources() []string {
 	out := make([]string, 0, len(s.jobs))
 	for k := range s.jobs {
 		out = append(out, k)
 	}
+	sort.Strings(out)
 	return out
 }
 

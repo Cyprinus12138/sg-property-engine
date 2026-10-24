@@ -5,6 +5,7 @@
 //	                                run one ingest job in the foreground and exit
 //	sgpe migrate                    apply pending migrations and exit
 //	sgpe config                     print the effective config (secrets masked)
+//	sgpe mcp [--url URL]            MCP server on stdio, backed by a running engine
 //
 // Configuration is layered: built-in defaults, then a YAML file (--config,
 // $SGPE_CONFIG, or ./sgpe.yaml — see sgpe.example.yaml), then environment
@@ -31,15 +32,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/Cyprinus12138/sg-property-engine/client"
 	"github.com/Cyprinus12138/sg-property-engine/db"
 	"github.com/Cyprinus12138/sg-property-engine/httpapi"
 	"github.com/Cyprinus12138/sg-property-engine/ingest"
 	"github.com/Cyprinus12138/sg-property-engine/internal/devdb"
+	"github.com/Cyprinus12138/sg-property-engine/mcpserver"
 	"github.com/Cyprinus12138/sg-property-engine/migrations"
 	"github.com/Cyprinus12138/sg-property-engine/scheduler"
 	"github.com/Cyprinus12138/sg-property-engine/sources"
 	"github.com/Cyprinus12138/sg-property-engine/store"
 )
+
+// version is stamped at build time with -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
 	_ = godotenv.Load()
@@ -63,7 +69,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "sgpe:", err)
 		os.Exit(2)
 	}
-	setupLogging(cfg.Server.LogLevel)
+	// stdout carries the protocol in stdio MCP mode; logs go to stderr there.
+	logOut := os.Stdout
+	if cmd == "mcp" {
+		logOut = os.Stderr
+	}
+	setupLogging(logOut, cfg.Server.LogLevel)
 	if cfg.Source != "" {
 		slog.Info("config loaded", "file", cfg.Source)
 	}
@@ -87,6 +98,8 @@ func main() {
 		}
 	case "config":
 		runErr = printConfig(os.Stdout, cfg)
+	case "mcp":
+		runErr = runMCP(ctx, cfg, args)
 	default:
 		usage()
 		runErr = fmt.Errorf("unknown command %q", cmd)
@@ -98,13 +111,16 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: sgpe [--config FILE] [serve|sync|migrate|config]
+	fmt.Fprintln(os.Stderr, `usage: sgpe [--config FILE] [serve|sync|migrate|config|mcp]
 
   serve     (default) apply migrations, start the cron scheduler, serve the query API
   sync      run one ingest job in the foreground:
               sgpe sync --source hdb --mode backfill|incremental [--arg value]
   migrate   apply pending migrations and exit
   config    print the effective configuration with secrets masked
+  mcp       serve MCP tools on stdin/stdout, querying a running engine:
+              sgpe mcp [--url http://localhost:8081]   (default: this config's port)
+            A running 'sgpe serve' also serves MCP over HTTP at /mcp.
 
   --config FILE   YAML config (default: $SGPE_CONFIG, else ./sgpe.yaml if present).
                   Environment variables override the file; see sgpe.example.yaml.`)
@@ -176,10 +192,10 @@ func printConfig(w io.Writer, cfg Config) error {
 	return enc.Close()
 }
 
-func setupLogging(level string) {
+func setupLogging(w io.Writer, level string) {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(level)) // validated in LoadConfig; zero value is info
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: lvl})))
 }
 
 // openStore connects and brings the schema up to date. Every subcommand
@@ -268,6 +284,8 @@ func serve(ctx context.Context, cfg Config) error {
 	}
 
 	srv := &httpapi.Server{Store: s, Sched: sched}
+	// MCP tools call the same handlers in-process; see package mcpserver.
+	srv.MCP = mcpserver.HTTPHandler(mcpserver.New(mcpserver.InProcessClient(srv.Routes()), version))
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr(),
 		Handler:           srv.Routes(),
@@ -306,6 +324,31 @@ func serve(ctx context.Context, cfg Config) error {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	return httpSrv.Shutdown(shutdownCtx)
+}
+
+// runMCP serves the MCP tools over stdio against an engine reached over
+// HTTP. It needs no database of its own: point it at any running engine,
+// e.g. the one `scripts/stack.sh up` started.
+func runMCP(ctx context.Context, cfg Config, args []string) error {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	engineURL := fs.String("url", "", "engine base URL (default http://localhost:<server.port>)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	u := *engineURL
+	if u == "" {
+		u = "http://localhost:" + cfg.Server.Port
+	}
+	c := client.New(u)
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, _, err := c.SyncStatus(pingCtx); err != nil {
+		// Keep serving: the engine may come up after the MCP client starts,
+		// and each tool call reports its own connection error.
+		slog.Warn("engine not reachable yet", "url", u, "err", err)
+	}
+	slog.Info("mcp on stdio", "engine", u)
+	return mcpserver.RunStdio(ctx, mcpserver.New(c, version))
 }
 
 // syncOnce runs a single job in the foreground. Useful for cron-less
