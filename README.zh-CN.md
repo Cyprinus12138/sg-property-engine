@@ -3,7 +3,9 @@
 [English](README.md) · **简体中文**
 
 [![CI](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Cyprinus12138/sg-property-engine.svg)](https://pkg.go.dev/github.com/Cyprinus12138/sg-property-engine)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cyprinus12138/sg-property-engine)](https://goreportcard.com/report/github.com/Cyprinus12138/sg-property-engine)
+[![Go version](https://img.shields.io/github/go-mod/go-version/Cyprinus12138/sg-property-engine)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 定时采集新加坡住宅房产公开数据，存入 Postgres + PostGIS，并通过统一的 API 提供地理空间查询。
