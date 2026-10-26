@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/sgpe ./cmd/sgpe
 FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.title="sg-property-engine" \
       org.opencontainers.image.source="https://github.com/Cyprinus12138/sg-property-engine" \
-      org.opencontainers.image.licenses="PolyForm-Noncommercial-1.0.0" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.authors="Mr.Cyprinus"
 COPY --from=build /out/sgpe /sgpe
 # The distroless home is 0700 nonroot. stack.sh runs the image as the

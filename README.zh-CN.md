@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cyprinus12138/sg-property-engine)](https://goreportcard.com/report/github.com/Cyprinus12138/sg-property-engine)
-[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 定时采集新加坡住宅房产公开数据，存入 Postgres + PostGIS，并通过统一的 API 提供地理空间查询。
 
@@ -250,6 +250,6 @@ TEST_DATABASE_URL=postgres://postgres:test@localhost:55434/postgres?sslmode=disa
 
 ## 许可
 
-[PolyForm Noncommercial 1.0.0](LICENSE)。非商业使用（个人、研究、教育，以及非商业组织的使用）免费。商业使用需要作者另行授权，请提交 issue 或联系 [Mr.Cyprinus](https://github.com/Cyprinus12138)。必须署名：任何副本都要保留 LICENSE 中的 `Required Notice` 一行和 NOTICE 文件。
+[MIT](LICENSE)。Copyright 2026 Mr.Cyprinus (https://github.com/Cyprinus12138)。
 
 此许可证仅适用于代码。引擎获取的数据仍受各发布方的条款约束，详见 [docs/DATA_TERMS.md](docs/DATA_TERMS.md)。

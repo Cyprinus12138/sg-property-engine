@@ -2,7 +2,7 @@
 
 sg-property-engine ships **no data**. Every row in your database is fetched
 from the publisher at run time under *your* registration, and the engine's
-licence (PolyForm Noncommercial 1.0.0) covers the code only. Before deploying,
+licence (MIT) covers the code only. Before deploying,
 read the current terms at each link below — they change, and this summary is a
 pointer, not legal advice.
 

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Cyprinus12138/sg-property-engine/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cyprinus12138/sg-property-engine)](https://goreportcard.com/report/github.com/Cyprinus12138/sg-property-engine)
-[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Singapore residential property open data, ingested on a schedule into Postgres +
 PostGIS and served through one geo-aware query API.
@@ -322,11 +322,7 @@ requests without touching the network. Schema changes are migrations under
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE). Noncommercial use — personal,
-research, educational, and by noncommercial organisations — is free. Commercial
-use requires a separate licence from the author; open an issue or contact
-[Mr.Cyprinus](https://github.com/Cyprinus12138). Attribution is required: keep
-the `Required Notice` line from the LICENSE and the NOTICE file with any copy.
+[MIT](LICENSE). Copyright 2026 Mr.Cyprinus (https://github.com/Cyprinus12138).
 
 The licence covers this code only. Data fetched by the engine remains subject
 to each publisher's terms — see [docs/DATA_TERMS.md](docs/DATA_TERMS.md).
